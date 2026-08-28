@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+vendor/
+.venv/
+__pycache__/
+
+# Build & Output
+dist/
+build/
+out/
+*.log
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Scratch WIP & Local tickets
+# Uncomment if you want scratch files untracked:
+# .scratch/*
+# !.scratch/.gitkeep
