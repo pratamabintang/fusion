@@ -128,7 +128,7 @@ def benchmark(args) -> list[dict]:
     md_content += f"- **Dataset**: LLVIP (`{args.split}` split)\n"
     md_content += f"- **Resolution**: {img_size[0]}x{img_size[1]}\n"
     md_content += f"- **Device**: `{device}`\n\n"
-    md_content += "## 📊 Comparative Performance Matrix\n\n"
+    md_content += "## Comparative Performance Matrix\n\n"
     md_content += "| Architecture / Mode | Description | Params (M) | Size (MB) | Latency (ms) | FPS | mAP@0.5 (%) | mAP@0.5:0.95 (%) |\n"
     md_content += "|---|---|---|---|---|---|---|---|\n"
     
@@ -139,7 +139,7 @@ def benchmark(args) -> list[dict]:
             f"{r['mAP_0.5'] * 100:.2f}% | {r['mAP_0.5_0.95'] * 100:.2f}% |\n"
         )
         
-    md_content += "\n## 💡 Key Architectural Insights\n\n"
+    md_content += "\n## Key Architectural Insights\n\n"
     md_content += "1. **Baseline Replication (`ms2fusion`)**: Integrates CP-SSM projection exchange and bidirectional FF-SSM with SE gating across independent scales.\n"
     md_content += "2. **Cross-Scale State Memory (`ms_ssm`)**: Propagates persistent hidden memory vectors across $P_3 \\rightarrow P_4 \\rightarrow P_5$ with negligible parameter increase.\n"
     md_content += r"3. **Illumination Modulation (`ic_ssm`)**: Dynamically weights continuous-to-discrete step sizes ($\Delta$) and transition matrices ($A$) according to optical luminance conditions." + "\n"
@@ -149,7 +149,6 @@ def benchmark(args) -> list[dict]:
         f.write(md_content)
         
     print(f"\n[+] Ablation benchmark report written to: {output_path}")
-    print("\n" + md_content)
     return results
 
 
