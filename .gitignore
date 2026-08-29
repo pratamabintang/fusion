@@ -1,10 +1,13 @@
-# Dependencies
+# Dependencies & Virtual Environments
 node_modules/
 vendor/
 .venv/
+env/
+venv/
 __pycache__/
+*.pyc
 
-# Build & Output
+# Python Build & Output
 dist/
 build/
 out/
@@ -25,7 +28,13 @@ runs/
 Thumbs.db
 desktop.ini
 
-# Scratch WIP & Local tickets
-# Uncomment if you want scratch files untracked:
-.scratch/*
-# !.scratch/.gitkeep
+# AI Agent Frameworks, Skills & Scratch Workspaces
+.agents/
+.claude-plugin/
+.claude/
+.gemini/
+.scratch/
+skills/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
