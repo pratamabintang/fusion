@@ -139,4 +139,34 @@ def test_selective_scan_dispatcher_fallback():
     
     assert torch.allclose(out_fn, out_ref, atol=1e-5)
 
+def test_selective_scan_float16():
+    B, D_dim, L, N = 2, 4, 8, 4
+    # Use small-magnitude inputs to stay within float16 dynamic range (max ~65504)
+    u = (torch.randn(B, D_dim, L) * 0.1).to(torch.float16)
+    delta = (torch.randn(B, D_dim, L) * 0.1).to(torch.float16)
+    A = -torch.rand(D_dim, N)  # negative A keeps state bounded
+    B_tensor = (torch.randn(B, N, L) * 0.1).to(torch.float16)
+    C = (torch.randn(B, N, L) * 0.1).to(torch.float16)
+    D = torch.randn(D_dim) * 0.1
+    delta_bias = torch.randn(D_dim) * 0.1
 
+    out = selective_scan_fn(u, delta, A, B_tensor, C, D, delta_bias, delta_softplus=True)
+    assert out.dtype == torch.float16
+    assert torch.isfinite(out).all()
+
+def test_selective_scan_gradcheck():
+    """Verify analytical gradients via torch.autograd.gradcheck."""
+    B, D_dim, L, N = 1, 2, 4, 2
+    u = torch.randn(B, D_dim, L, dtype=torch.float64, requires_grad=True)
+    delta = torch.randn(B, D_dim, L, dtype=torch.float64, requires_grad=True)
+    A = torch.randn(D_dim, N, dtype=torch.float64, requires_grad=True)
+    B_tensor = torch.randn(B, N, L, dtype=torch.float64, requires_grad=True)
+    C = torch.randn(B, N, L, dtype=torch.float64, requires_grad=True)
+
+    assert torch.autograd.gradcheck(
+        selective_scan_ref,
+        (u, delta, A, B_tensor, C),
+        eps=1e-6,
+        atol=1e-4,
+        rtol=1e-3,
+    )

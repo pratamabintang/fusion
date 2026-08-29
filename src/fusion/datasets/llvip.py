@@ -1,12 +1,25 @@
+"""LLVIP Paired Dataset — visible/thermal pedestrian detection pipeline.
+
+Loads paired visible (RGB) and thermal (infrared) images with Pascal VOC XML
+annotations from the LLVIP dataset structure.
+"""
+
 import os
 import glob
 import xml.etree.ElementTree as ET
+
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
 import torchvision.transforms.functional as TF
 
-def parse_voc_xml(xml_path):
+
+def parse_voc_xml(xml_path: str) -> list[dict]:
+    """Parse a Pascal VOC XML annotation file.
+
+    Returns a list of dicts, each with ``'class'`` (str) and
+    ``'bbox'`` ([xmin, ymin, xmax, ymax] as ints).
+    """
     tree = ET.parse(xml_path)
     root = tree.getroot()
     objects = []
@@ -20,7 +33,19 @@ def parse_voc_xml(xml_path):
         objects.append({'class': name, 'bbox': [xmin, ymin, xmax, ymax]})
     return objects
 
-def xyxy_to_xywh(boxes):
+
+def xyxy_to_xywh(boxes: torch.Tensor) -> torch.Tensor:
+    """Convert bounding boxes from corner ``[x1, y1, x2, y2]`` to center
+    ``[x_center, y_center, width, height]`` format.
+
+    Parameters
+    ----------
+    boxes : Tensor (N, 4)
+
+    Returns
+    -------
+    Tensor (N, 4)
+    """
     xywh = torch.empty_like(boxes)
     xywh[:, 0] = (boxes[:, 0] + boxes[:, 2]) / 2.0
     xywh[:, 1] = (boxes[:, 1] + boxes[:, 3]) / 2.0
@@ -28,7 +53,19 @@ def xyxy_to_xywh(boxes):
     xywh[:, 3] = boxes[:, 3] - boxes[:, 1]
     return xywh
 
-def xywh_to_xyxy(boxes):
+
+def xywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
+    """Convert bounding boxes from center ``[x_c, y_c, w, h]`` to corner
+    ``[x1, y1, x2, y2]`` format.
+
+    Parameters
+    ----------
+    boxes : Tensor (N, 4)
+
+    Returns
+    -------
+    Tensor (N, 4)
+    """
     xyxy = torch.empty_like(boxes)
     xyxy[:, 0] = boxes[:, 0] - boxes[:, 2] / 2.0
     xyxy[:, 1] = boxes[:, 1] - boxes[:, 3] / 2.0
@@ -36,63 +73,90 @@ def xywh_to_xyxy(boxes):
     xyxy[:, 3] = boxes[:, 1] + boxes[:, 3] / 2.0
     return xyxy
 
+
 class LLVIPDataset(Dataset):
+    """PyTorch Dataset for the LLVIP paired visible/thermal pedestrian dataset.
+
+    Each sample returns ``(visible_tensor, thermal_tensor, target, image_meta)``
+    where:
+
+    - ``visible_tensor``: (3, H, W) float32 normalised [0, 1]
+    - ``thermal_tensor``: (3, H, W) float32 normalised [0, 1]
+    - ``target``: dict with ``'boxes'`` (N, 4) xyxy and ``'labels'`` (N,) int64
+    - ``image_meta``: dict with ``'filename'``, ``'orig_size'`` (H, W),
+      ``'img_size'`` (H, W)
+    """
+
     def __init__(self, root, split, img_size=(640, 640), transform=None):
         self.root = root
         self.split = split
         self.img_size = img_size
         self.transform = transform
-        
+
         vis_dir = os.path.join(root, 'visible', split)
         self.image_files = sorted(glob.glob(os.path.join(vis_dir, '*.jpg')))
-        
+
     def __len__(self):
         return len(self.image_files)
-        
+
     def __getitem__(self, idx):
         vis_path = self.image_files[idx]
         filename = os.path.basename(vis_path)
-        ir_path = os.path.join(self.root, 'infrared', self.split, filename)
-        xml_path = os.path.join(self.root, 'Annotations', filename.replace('.jpg', '.xml'))
-        
+        thermal_path = os.path.join(
+            self.root, 'infrared', self.split, filename,
+        )
+        xml_path = os.path.join(
+            self.root, 'Annotations', filename.replace('.jpg', '.xml'),
+        )
+
         vis_img = Image.open(vis_path).convert('RGB')
-        ir_img = Image.open(ir_path).convert('RGB')
+        thermal_img = Image.open(thermal_path).convert('RGB')
         orig_w, orig_h = vis_img.size
-        
+
         vis_img = vis_img.resize(self.img_size, Image.BILINEAR)
-        ir_img = ir_img.resize(self.img_size, Image.BILINEAR)
-        
-        vis_tensor = TF.to_tensor(vis_img)
-        ir_tensor = TF.to_tensor(ir_img)
-        
+        thermal_img = thermal_img.resize(self.img_size, Image.BILINEAR)
+
+        visible_tensor = TF.to_tensor(vis_img)
+        thermal_tensor = TF.to_tensor(thermal_img)
+
         objects = parse_voc_xml(xml_path)
-        
+
         boxes = []
         labels = []
-        
+
         scale_x = self.img_size[0] / orig_w
         scale_y = self.img_size[1] / orig_h
-        
+
         for obj in objects:
             xmin, ymin, xmax, ymax = obj['bbox']
-            boxes.append([xmin * scale_x, ymin * scale_y, xmax * scale_x, ymax * scale_y])
-            # Assuming 'person' is class 1, or just 0, but standard typically uses integers. Let's use 0 for person.
-            labels.append(0)
-            
+            boxes.append([
+                xmin * scale_x, ymin * scale_y,
+                xmax * scale_x, ymax * scale_y,
+            ])
+            labels.append(0)  # single-class: person = 0
+
         if len(boxes) > 0:
             boxes_tensor = torch.tensor(boxes, dtype=torch.float32)
             labels_tensor = torch.tensor(labels, dtype=torch.int64)
         else:
             boxes_tensor = torch.empty((0, 4), dtype=torch.float32)
             labels_tensor = torch.empty((0,), dtype=torch.int64)
-            
+
         target = {
             'boxes': boxes_tensor,
-            'labels': labels_tensor
+            'labels': labels_tensor,
         }
-        
+
+        image_meta = {
+            'filename': filename,
+            'orig_size': (orig_h, orig_w),
+            'img_size': (self.img_size[1], self.img_size[0]),
+        }
+
         if self.transform:
-            # Not fully implementing complex transforms, but support the kwarg
-            pass
-            
-        return vis_tensor, ir_tensor, target
+            visible_tensor, thermal_tensor, target = self.transform(
+                visible_tensor, thermal_tensor, target,
+            )
+
+        return visible_tensor, thermal_tensor, target, image_meta
+

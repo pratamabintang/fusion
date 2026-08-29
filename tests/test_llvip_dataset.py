@@ -101,10 +101,10 @@ def test_dataset_len(mock_llvip):
 
 def test_dataset_getitem(mock_llvip):
     dataset = LLVIPDataset(mock_llvip, 'train', img_size=(32, 32))
-    vis, ir, target = dataset[0]
+    visible, thermal, target, image_meta = dataset[0]
     
-    assert vis.shape == (3, 32, 32)
-    assert ir.shape == (3, 32, 32)
+    assert visible.shape == (3, 32, 32)
+    assert thermal.shape == (3, 32, 32)
     
     assert 'boxes' in target
     assert 'labels' in target
@@ -114,25 +114,33 @@ def test_dataset_getitem(mock_llvip):
     # Original is 10,10,30,30 on 64x64, scaled to 32x32 -> 5,5,15,15
     assert torch.allclose(boxes, torch.tensor([[5.0, 5.0, 15.0, 15.0]]))
     assert target['labels'].shape == (1,)
+
+    # Verify image_meta
+    assert image_meta['filename'] == '010000.jpg'
+    assert image_meta['orig_size'] == (64, 64)
+    assert image_meta['img_size'] == (32, 32)
     
 def test_dataset_empty_annotation(mock_llvip):
     dataset = LLVIPDataset(mock_llvip, 'test', img_size=(32, 32))
     # the second test sample has empty annotation
-    vis, ir, target = dataset[1]
+    visible, thermal, target, image_meta = dataset[1]
     
     assert target['boxes'].shape == (0, 4)
     assert target['labels'].shape == (0,)
 
 def collate_fn(batch):
-    vis = torch.stack([b[0] for b in batch])
-    ir = torch.stack([b[1] for b in batch])
+    visible = torch.stack([b[0] for b in batch])
+    thermal = torch.stack([b[1] for b in batch])
     targets = [b[2] for b in batch]
-    return vis, ir, targets
+    image_metas = [b[3] for b in batch]
+    return visible, thermal, targets, image_metas
 
 def test_dataloader(mock_llvip):
     dataset = LLVIPDataset(mock_llvip, 'train')
     loader = DataLoader(dataset, batch_size=2, collate_fn=collate_fn)
-    vis, ir, targets = next(iter(loader))
-    assert vis.shape == (2, 3, 640, 640)
-    assert ir.shape == (2, 3, 640, 640)
+    visible, thermal, targets, image_metas = next(iter(loader))
+    assert visible.shape == (2, 3, 640, 640)
+    assert thermal.shape == (2, 3, 640, 640)
     assert len(targets) == 2
+    assert len(image_metas) == 2
+
