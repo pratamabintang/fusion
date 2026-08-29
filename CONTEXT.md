@@ -18,6 +18,11 @@ Use these precise terms consistently across code, tests, documentation, and issu
 - **MS2Fusion Block**: The hierarchical fusion module combining CP-SSM, SP-SSM, and FF-SSM at multi-scale feature stages ($P_3, P_4, P_5$).
 - **Two-Stream Detector Backbone**: Parallel feature extraction networks for RGB and Thermal streams that feed into multi-level fusion blocks prior to the neck and detection head.
 - **Selective Scan Operator**: The continuous-to-discrete state-space recurrent/convolutional scan operator (with CUDA-accelerated kernel and pure PyTorch CPU/fallback implementation).
+- **Baseline Model (Pure MS2Fusion)**: Exact paper replication using standard MS2Fusion blocks at $P_3, P_4, P_5$ without state memory propagation or illumination modulation (`fusion_type='ms2fusion'`).
+- **MS-SSM (Multi-Scale State-Space Memory Bridge)**: Modular extension propagating hidden state memory vectors across feature pyramid levels ($P_3 \rightarrow P_4 \rightarrow P_5$) to preserve fine boundary context (`fusion_type='ms_ssm'`).
+- **IC-SSM (Illumination & Contrast Adaptive State Modulation)**: Modular extension dynamically weighting state transitions ($\Delta, A$) and channel gating based on environmental illumination and contrast metrics (`fusion_type='ic_ssm'`).
+- **Combined Model**: Integration of both the Multi-Scale Memory Bridge and Illumination-Adaptive Modulation (`fusion_type='combined'`).
+- **Experiment Runner**: Unified CLI suite (`scripts/train.py`, `scripts/benchmark.py`, `scripts/demo.py`, `scripts/eval.py`) supporting independent execution, ablation benchmarking, and visualization across all model variants.
 - **Seam**: A clean boundary between components where tests or alternate implementations can be attached without reaching into private internals.
 - **Deep Module**: A module that exposes a simple interface hiding substantial logic, validation, and domain rules behind it.
 - **Tracer Bullet**: An end-to-end slice through all architectural layers that demonstrates viability before fleshing out full functionality.
