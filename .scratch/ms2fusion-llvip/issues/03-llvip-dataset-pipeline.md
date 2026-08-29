@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Implement XML annotation parser for Pascal VOC format extracting bounding boxes and class labels (`person`).
-- [ ] Implement `LLVIPDataset` supporting synchronized loading of `visible/` (RGB) and `infrared/` (grayscale/3-channel) image pairs for train and test splits.
-- [ ] Implement synchronized data augmentations (resizing to 640×640 / 640×512, normalization, horizontal flip, mosaic augmentation).
-- [ ] Provide synthetic paired-image dataset fixtures for fast, deterministic unit and integration tests.
-- [ ] Unit tests verify dataset indexing, bounding box format transformations ($[x_1, y_1, x_2, y_2] \leftrightarrow [x_c, y_c, w, h]$), and DataLoader collation.
+- [x] Implement XML annotation parser for Pascal VOC format extracting bounding boxes and class labels (`person`).
+- [x] Implement `LLVIPDataset` supporting synchronized loading of `visible/` (RGB) and `infrared/` (grayscale/3-channel) image pairs for train and test splits.
+- [x] Implement synchronized data augmentations (resizing to 640×640 / 640×512, normalization, horizontal flip, mosaic augmentation).
+- [x] Provide synthetic paired-image dataset fixtures for fast, deterministic unit and integration tests.
+- [x] Unit tests verify dataset indexing, bounding box format transformations ($[x_1, y_1, x_2, y_2] \leftrightarrow [x_c, y_c, w, h]$), and DataLoader collation.
