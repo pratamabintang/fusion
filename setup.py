@@ -1,5 +1,4 @@
 import os
-import sys
 from setuptools import setup, find_packages
 import torch
 
@@ -9,14 +8,15 @@ except ImportError:
     BuildExtension = None
     CUDAExtension = None
 
+
 def get_extensions():
     if not torch.cuda.is_available() or CUDAExtension is None:
         return []
 
-    csrc_dir = os.path.join(os.path.dirname(__file__), "src", "fusion", "csrc")
+    # Paths must be relative to setup.py for editable installs
     sources = [
-        os.path.join(csrc_dir, "selective_scan.cpp"),
-        os.path.join(csrc_dir, "selective_scan_cuda.cu"),
+        "src/fusion/csrc/selective_scan.cpp",
+        "src/fusion/csrc/selective_scan_cuda.cu",
     ]
 
     ext_modules = [
@@ -32,6 +32,8 @@ def get_extensions():
                     "-U__CUDA_NO_BFLOAT16_CONVERSIONS__",
                     "--expt-relaxed-constexpr",
                     "--expt-extended-lambda",
+
+                    # NVIDIA GPU architectures
                     "-gencode=arch=compute_80,code=sm_80",
                     "-gencode=arch=compute_86,code=sm_86",
                     "-gencode=arch=compute_89,code=sm_89",
@@ -42,11 +44,15 @@ def get_extensions():
             },
         )
     ]
+
     return ext_modules
 
+
 cmdclass = {}
+
 if torch.cuda.is_available() and BuildExtension is not None:
     cmdclass["build_ext"] = BuildExtension
+
 
 setup(
     name="fusion",
