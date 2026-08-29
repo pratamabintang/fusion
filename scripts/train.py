@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument("--no-amp", dest="amp", action="store_false", help="Disable automatic mixed precision")
     parser.add_argument("--name", type=str, default="exp", help="Experiment name")
     parser.add_argument("--save-dir", type=str, default="runs/train", help="Directory to save experiment outputs")
+    parser.add_argument("--weights", type=str, default=None, help="Path to initial weights / pretrained checkpoint .pt")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume training from")
     parser.add_argument("--base-channels", type=int, help="Base channel dimension for backbone")
     parser.add_argument("--base-depth", type=int, help="Base depth multiplier for backbone")
@@ -86,13 +87,17 @@ def train(cfg: dict) -> dict:
         d_state=cfg.get("d_state", 4),
     ).to(device)
     
-    # Resume checkpoint if specified
-    if cfg.get("resume") and Path(cfg["resume"]).exists():
-        ckpt = torch.load(cfg["resume"], map_location=device, weights_only=False)
-        if "model_state_dict" in ckpt:
-            model.load_state_dict(ckpt["model_state_dict"])
-        else:
-            model.load_state_dict(ckpt)
+    # Load initial weights or resume checkpoint if specified
+    weights_path = cfg.get("weights") or cfg.get("resume")
+    if weights_path and Path(weights_path).exists():
+        ckpt = torch.load(weights_path, map_location=device, weights_only=False)
+        state_dict = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
+        if isinstance(state_dict, dict):
+            model_dict = model.state_dict()
+            pretrained_dict = {k: v for k, v in state_dict.items() if k in model_dict and model_dict[k].shape == v.shape}
+            model_dict.update(pretrained_dict)
+            model.load_state_dict(model_dict)
+            print(f"[+] Successfully loaded {len(pretrained_dict)}/{len(model_dict)} matching layers from {weights_path}")
             
     evaluator = Evaluator(model, val_loader, device=device)
     trainer = Trainer(
