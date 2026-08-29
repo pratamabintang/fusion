@@ -4,10 +4,10 @@
 
 **Blocked by:** 05 (Phase 1 Replication Baseline Trainer, Evaluator & Acceptance Gate Verification)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Implement `MSSSMBlock` supporting cross-stage state transmission ($h_k^{(P3)} \rightarrow h_k^{(P4)} \rightarrow h_k^{(P5)}$).
-- [ ] Connect `MSSSMBlock` into `MS2FusionDetector` via the established fusion block seam.
-- [ ] Unit tests verify multi-scale state tensor dimension alignment and gradient backpropagation across pyramid stages.
-- [ ] Run comparative evaluation on LLVIP against the Phase 1 replication baseline.
-- [ ] Record findings and ablation metrics in comparison reports.
+- [x] Implement `MSSSMBlock` supporting cross-stage state transmission ($h_k^{(P3)} \rightarrow h_k^{(P4)} \rightarrow h_k^{(P5)}$).
+- [x] Connect `MSSSMBlock` into `MS2FusionDetector` via the established fusion block seam.
+- [x] Unit tests verify multi-scale state tensor dimension alignment and gradient backpropagation across pyramid stages.
+- [x] Run comparative evaluation on LLVIP against the Phase 1 replication baseline.
+- [x] Record findings and ablation metrics in comparison reports.

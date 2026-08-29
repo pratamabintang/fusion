@@ -4,10 +4,10 @@
 
 **Blocked by:** 05 (Phase 1 Replication Baseline Trainer, Evaluator & Acceptance Gate Verification)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Implement `AdaptiveGatingModule` calculating illumination/contrast scores from $F_V$ and $F_T$.
-- [ ] Implement `ICSSMBlock` that modulates state space transition matrices ($\Delta, A$) using adaptive gating scores.
-- [ ] Unit tests verify dynamic parameter modulation ranges and gradient flow under varied illumination conditions.
-- [ ] Benchmark IC-SSM against the Phase 1 baseline and MS-SSM on LLVIP.
-- [ ] Document final ablation study comparing Original MS2Fusion vs MS-SSM vs IC-SSM vs Combined.
+- [x] Implement `AdaptiveGatingModule` calculating illumination/contrast scores from $F_V$ and $F_T$.
+- [x] Implement `ICSSMBlock` that modulates state space transition matrices ($\Delta, A$) using adaptive gating scores.
+- [x] Unit tests verify dynamic parameter modulation ranges and gradient flow under varied illumination conditions.
+- [x] Benchmark IC-SSM against the Phase 1 baseline and MS-SSM on LLVIP.
+- [x] Document final ablation study comparing Original MS2Fusion vs MS-SSM vs IC-SSM vs Combined.

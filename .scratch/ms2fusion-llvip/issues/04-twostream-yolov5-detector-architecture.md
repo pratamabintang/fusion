@@ -4,11 +4,11 @@
 
 **Blocked by:** 02 (MS2Fusion Parametric Interaction Modules)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Implement dual-stream CSPDarkNet53 backbone with independent feature extraction for visible and thermal modalities.
-- [ ] Connect multi-scale features ($P_3, P_4, P_5$) to `MS2FusionBlock` instances at each scale.
-- [ ] Implement PANet neck aggregating multi-scale fused features with top-down and bottom-up pathways.
-- [ ] Implement anchor-based detection head with bounding box regression, objectness, and class probability prediction.
-- [ ] Implement composite YOLO loss function (GIoU/CIoU box loss, BCE objectness loss, BCE classification loss).
-- [ ] Integration test verifies an end-to-end forward pass and backward step on CPU with synthetic batch without NaN/Inf.
+- [x] Implement dual-stream CSPDarkNet53 backbone with independent feature extraction for visible and thermal modalities.
+- [x] Connect multi-scale features ($P_3, P_4, P_5$) to `MS2FusionBlock` instances at each scale.
+- [x] Implement PANet neck aggregating multi-scale fused features with top-down and bottom-up pathways.
+- [x] Implement anchor-based detection head with bounding box regression, objectness, and class probability prediction.
+- [x] Implement composite YOLO loss function (GIoU/CIoU box loss, BCE objectness loss, BCE classification loss).
+- [x] Integration test verifies an end-to-end forward pass and backward step on CPU with synthetic batch without NaN/Inf.
