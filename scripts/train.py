@@ -105,29 +105,54 @@ def train(cfg: dict) -> dict:
         amp=cfg.get("amp", True),
     )
     
-    history = trainer.train()
+    best_map = -1.0
+    history = []
     
-    # Evaluate final
-    final_metrics = evaluator()
+    results_csv_path = save_dir / "results.csv"
+    with open(results_csv_path, "w", encoding="utf-8") as f:
+        f.write("epoch,train_loss,val_mAP_0.5,val_mAP_0.5_0.95,precision,recall\n")
+        
+    for epoch in range(1, cfg.get("epochs", 50) + 1):
+        loss_dict = trainer.train_one_epoch()
+        train_loss = loss_dict.get("total_loss", 0.0)
+        
+        val_metrics = evaluator()
+        map50 = val_metrics.get("mAP_0.5", 0.0)
+        map95 = val_metrics.get("mAP_0.5_0.95", 0.0)
+        prec = val_metrics.get("precision", 0.0)
+        rec = val_metrics.get("recall", 0.0)
+        
+        history.append({
+            "epoch": epoch,
+            "train_loss": train_loss,
+            "val_metrics": val_metrics,
+        })
+        
+        with open(results_csv_path, "a", encoding="utf-8") as f:
+            f.write(f"{epoch},{train_loss:.6f},{map50:.4f},{map95:.4f},{prec:.4f},{rec:.4f}\n")
+            
+        if map50 > best_map:
+            best_map = map50
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "metrics": val_metrics,
+                "config": cfg,
+            }, str(weights_dir / "best.pt"))
+            
+        torch.save({
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "metrics": val_metrics,
+            "config": cfg,
+        }, str(weights_dir / "last.pt"))
     
-    # Save checkpoints
-    torch.save({
-        "epoch": cfg.get("epochs", 50),
-        "model_state_dict": model.state_dict(),
-        "metrics": final_metrics,
-        "config": cfg,
-    }, str(weights_dir / "last.pt"))
+    # Final evaluation
+    final_metrics = val_metrics if len(history) > 0 else evaluator()
     
-    torch.save({
-        "epoch": cfg.get("epochs", 50),
-        "model_state_dict": model.state_dict(),
-        "metrics": final_metrics,
-        "config": cfg,
-    }, str(weights_dir / "best.pt"))
-    
-    # Save results summary
     summary = {
         "final_metrics": final_metrics,
+        "best_mAP_0.5": best_map,
         "epochs": len(history),
         "history": history,
     }

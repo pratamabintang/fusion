@@ -37,10 +37,10 @@ def benchmark(args) -> list[dict]:
         img_size = (128, 128)
         
     modes = [
-        ("ms2fusion", "Baseline Replication (CP + SP + FF-SSM)"),
-        ("ms_ssm", "Innovation 1 (MS-SSM Memory Bridge P3->P4->P5)"),
-        ("ic_ssm", "Innovation 2 (IC-SSM Illumination Adaptive Modulation)"),
-        ("combined", "Combined (MS-SSM Bridge + IC-SSM Modulation)"),
+        ("ms2fusion", "Baseline Model (Pure MS2Fusion)"),
+        ("ms_ssm", "MS-SSM (Multi-Scale State-Space Memory Bridge)"),
+        ("ic_ssm", "IC-SSM (Illumination & Contrast Adaptive State Modulation)"),
+        ("combined", "Combined Model"),
     ]
     
     val_dataset = LLVIPDataset(data_dir=args.data_dir, split=args.split, img_size=img_size)

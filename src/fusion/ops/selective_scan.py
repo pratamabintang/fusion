@@ -128,6 +128,23 @@ def selective_scan_ref(
 # CUDA kernel dispatcher (torch.autograd.Function)
 # ---------------------------------------------------------------------------
 
+def _get_cuda_extension():
+    """Attempt to import the CUDA selective scan extension module."""
+    try:
+        import selective_scan_cuda_core as cuda_ext
+        return cuda_ext
+    except ImportError:
+        try:
+            import fusion.selective_scan_cuda_core as cuda_ext
+            return cuda_ext
+        except ImportError:
+            return None
+
+
+# ---------------------------------------------------------------------------
+# CUDA kernel dispatcher (torch.autograd.Function)
+# ---------------------------------------------------------------------------
+
 class _SelectiveScanCUDA(torch.autograd.Function):
     """Autograd wrapper around the ``selective_scan_cuda_core`` C++ extension.
 
@@ -139,16 +156,12 @@ class _SelectiveScanCUDA(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, u, delta, A, B, C, D=None, delta_bias=None, delta_softplus=False, z=None):
-        try:
-            import selective_scan_cuda_core as cuda_ext
-        except ImportError:
-            try:
-                import fusion.selective_scan_cuda_core as cuda_ext
-            except ImportError as exc:
-                raise RuntimeError(
-                    "selective_scan_cuda_core is not installed. "
-                    "Use selective_scan_ref for CPU execution."
-                ) from exc
+        cuda_ext = _get_cuda_extension()
+        if cuda_ext is None:
+            raise RuntimeError(
+                "selective_scan_cuda_core is not installed. "
+                "Use selective_scan_ref for CPU execution."
+            )
 
         if u.stride(-1) != 1:
             u = u.contiguous()
@@ -179,15 +192,11 @@ class _SelectiveScanCUDA(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dout):
-        try:
-            import selective_scan_cuda_core as cuda_ext
-        except ImportError:
-            try:
-                import fusion.selective_scan_cuda_core as cuda_ext
-            except ImportError as exc:
-                raise RuntimeError(
-                    "selective_scan_cuda_core is not installed."
-                ) from exc
+        cuda_ext = _get_cuda_extension()
+        if cuda_ext is None:
+            raise RuntimeError(
+                "selective_scan_cuda_core is not installed."
+            )
 
         u, delta, A, B, C, D, z, delta_bias, x = ctx.saved_tensors
         if dout.stride(-1) != 1:
@@ -220,19 +229,7 @@ def selective_scan_fn(
     importable **and** the input ``u`` resides on a CUDA device.  Otherwise
     falls back to :func:`selective_scan_ref`.
     """
-    use_cuda = False
-    if u.is_cuda:
-        try:
-            import selective_scan_cuda_core  # noqa: F401
-            use_cuda = True
-        except ImportError:
-            try:
-                import fusion.selective_scan_cuda_core  # noqa: F401
-                use_cuda = True
-            except ImportError:
-                pass
-
-    if use_cuda:
+    if u.is_cuda and _get_cuda_extension() is not None:
         return _SelectiveScanCUDA.apply(
             u, delta, A, B, C, D, delta_bias, delta_softplus, z,
         )

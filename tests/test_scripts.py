@@ -105,6 +105,6 @@ def test_benchmark_cli_execution(tmp_path):
     
     with open(report_path, "r", encoding="utf-8") as f:
         content = f.read()
-        assert "Baseline Replication" in content
-        assert "MS-SSM Memory Bridge" in content
-        assert "IC-SSM Illumination" in content
+        assert "Baseline Model (Pure MS2Fusion)" in content
+        assert "MS-SSM (Multi-Scale State-Space Memory Bridge)" in content
+        assert "IC-SSM (Illumination & Contrast Adaptive State Modulation)" in content

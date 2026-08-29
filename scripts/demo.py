@@ -26,7 +26,8 @@ def parse_args():
     parser.add_argument("--iou-thres", type=float, default=0.45, help="IoU threshold for NMS")
     parser.add_argument("--img-size", type=int, nargs="+", default=[640, 640], help="Image size (H, W)")
     parser.add_argument("--device", type=str, default="cuda", help="Device ('cuda' or 'cpu')")
-    parser.add_argument("--save-dir", type=str, default="runs/demo/exp", help="Directory to save output visualizations")
+    parser.add_argument("--name", type=str, default="exp", help="Experiment name")
+    parser.add_argument("--save-dir", type=str, default="runs/demo", help="Base directory to save output visualizations")
     parser.add_argument("--base-channels", type=int, default=64)
     parser.add_argument("--base-depth", type=int, default=3)
     return parser.parse_args()
@@ -37,7 +38,7 @@ def run_demo(args) -> list[str]:
     if device == "cuda" and not torch.cuda.is_available():
         device = "cpu"
         
-    save_dir = Path(args.save_dir)
+    save_dir = Path(args.save_dir) / getattr(args, "name", "exp") if not str(args.save_dir).endswith(getattr(args, "name", "exp")) else Path(args.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
     
     img_size = tuple(args.img_size) if isinstance(args.img_size, list) else (args.img_size, args.img_size)
