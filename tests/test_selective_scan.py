@@ -94,10 +94,11 @@ def test_selective_scan_D():
     assert torch.allclose(out1, out2 + u * D.unsqueeze(-1), atol=1e-5)
 
 def test_selective_scan_backward():
+    torch.manual_seed(42)
     B, D_dim, L, N = 2, 4, 16, 8
     u = torch.randn(B, D_dim, L, requires_grad=True)
     delta = torch.randn(B, D_dim, L, requires_grad=True)
-    A = torch.randn(D_dim, N, requires_grad=True)
+    A = (-torch.rand(D_dim, N) - 0.1).requires_grad_(True)
     B_tensor = torch.randn(B, N, L, requires_grad=True)
     C = torch.randn(B, N, L, requires_grad=True)
     D = torch.randn(D_dim, requires_grad=True)

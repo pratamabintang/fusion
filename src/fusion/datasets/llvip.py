@@ -87,13 +87,13 @@ class LLVIPDataset(Dataset):
       ``'img_size'`` (H, W)
     """
 
-    def __init__(self, root, split, img_size=(640, 640), transform=None):
-        self.root = root
+    def __init__(self, root=None, split="train", img_size=(640, 640), transform=None, data_dir=None):
+        self.root = str(root or data_dir or "D:/fusion/LLVIP")
         self.split = split
         self.img_size = img_size
         self.transform = transform
 
-        vis_dir = os.path.join(root, 'visible', split)
+        vis_dir = os.path.join(self.root, 'visible', split)
         self.image_files = sorted(glob.glob(os.path.join(vis_dir, '*.jpg')))
 
     def __len__(self):
