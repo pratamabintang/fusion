@@ -14,7 +14,7 @@ from fusion.models.detector import MS2FusionDetector
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Multi-Architecture Ablation Benchmark Runner")
-    parser.add_argument("--data-dir", type=str, default="D:/fusion/LLVIP", help="Path to LLVIP dataset")
+    parser.add_argument("--data-dir", type=str, default="data/LLVIP", help="Path to LLVIP dataset")
     parser.add_argument("--split", type=str, default="test", help="Evaluation split")
     parser.add_argument("--img-size", type=int, nargs="+", default=[640, 640], help="Image size")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size")

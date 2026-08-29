@@ -1,4 +1,4 @@
-data_dir: "D:/fusion/LLVIP"
+data_dir: "data/LLVIP"
 img_size: [640, 640]
 batch_size: 8
 epochs: 50

@@ -56,7 +56,7 @@ def train(cfg: dict) -> dict:
     else:
         img_size = tuple(img_size)
         
-    data_dir = cfg.get("data_dir", "D:/fusion/LLVIP")
+    data_dir = cfg.get("data_dir", "data/LLVIP")
     batch_size = cfg.get("batch_size", 8)
     
     train_dataset = LLVIPDataset(data_dir=data_dir, split="train", img_size=img_size)

@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument("--weights", type=str, default=None, help="Path to model weights .pt")
     parser.add_argument("--visible", type=str, default=None, help="Path to single visible image")
     parser.add_argument("--thermal", type=str, default=None, help="Path to single thermal image")
-    parser.add_argument("--data-dir", type=str, default="D:/fusion/LLVIP", help="Path to LLVIP dataset")
+    parser.add_argument("--data-dir", type=str, default="data/LLVIP", help="Path to LLVIP dataset")
     parser.add_argument("--split", type=str, default="test", help="Dataset split")
     parser.add_argument("--num-samples", type=int, default=5, help="Number of samples to visualize from dataset")
     parser.add_argument("--fusion-type", type=str, default="ms2fusion", choices=["ms2fusion", "ms_ssm", "ic_ssm", "combined"])

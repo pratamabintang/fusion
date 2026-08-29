@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument("--weights", type=str, default=None, help="Path to checkpoint .pt")
     parser.add_argument("--config", type=str, default=None, help="Path to YAML config")
     parser.add_argument("--fusion-type", type=str, default="ms2fusion", choices=["ms2fusion", "ms_ssm", "ic_ssm", "combined"])
-    parser.add_argument("--data-dir", type=str, default="D:/fusion/LLVIP", help="Path to LLVIP dataset")
+    parser.add_argument("--data-dir", type=str, default="data/LLVIP", help="Path to LLVIP dataset")
     parser.add_argument("--split", type=str, default="test", help="Dataset split ('test' or 'train')")
     parser.add_argument("--img-size", type=int, nargs="+", default=[640, 640], help="Image size (H, W)")
     parser.add_argument("--batch-size", type=int, default=8, help="Evaluation batch size")

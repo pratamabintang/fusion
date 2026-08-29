@@ -87,7 +87,7 @@ def test_gate_3_sample_llvip_training_cycle():
     
     model = MS2FusionDetector(nc=1, base_channels=32, base_depth=1)
     
-    dataset = LLVIPDataset('D:/fusion/LLVIP', 'train', img_size=(128, 128))
+    dataset = LLVIPDataset('data/LLVIP', 'train', img_size=(128, 128))
     # use subset for speed
     dataset.image_files = dataset.image_files[:4]
     
@@ -106,7 +106,7 @@ def test_evaluator_validation_pass():
     from torch.utils.data import DataLoader
 
     model = MS2FusionDetector(nc=1, base_channels=32, base_depth=1)
-    dataset = LLVIPDataset('D:/fusion/LLVIP', 'test', img_size=(128, 128))
+    dataset = LLVIPDataset('data/LLVIP', 'test', img_size=(128, 128))
     dataset.image_files = dataset.image_files[:2]
 
     loader = DataLoader(dataset, batch_size=2, collate_fn=collate_fn)

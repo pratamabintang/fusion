@@ -27,5 +27,5 @@ desktop.ini
 
 # Scratch WIP & Local tickets
 # Uncomment if you want scratch files untracked:
-# .scratch/*
+.scratch/*
 # !.scratch/.gitkeep

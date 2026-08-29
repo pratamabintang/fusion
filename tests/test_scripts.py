@@ -13,7 +13,7 @@ def test_train_cli_execution(tmp_path):
     save_dir = tmp_path / "runs" / "train"
     cfg = {
         "fusion_type": "ms2fusion",
-        "data_dir": "D:/fusion/LLVIP",
+        "data_dir": "data/LLVIP",
         "img_size": [128, 128],
         "batch_size": 2,
         "epochs": 1,
@@ -41,7 +41,7 @@ def test_eval_cli_execution():
         weights = None
         config = None
         fusion_type = "ms_ssm"
-        data_dir = "D:/fusion/LLVIP"
+        data_dir = "data/LLVIP"
         split = "test"
         img_size = [128, 128]
         batch_size = 2
@@ -65,7 +65,7 @@ def test_demo_cli_execution(tmp_path):
         weights = None
         visible = None
         thermal = None
-        data_dir = "D:/fusion/LLVIP"
+        data_dir = "data/LLVIP"
         split = "test"
         num_samples = 2
         fusion_type = "combined"
@@ -88,7 +88,7 @@ def test_benchmark_cli_execution(tmp_path):
     report_path = tmp_path / "runs" / "benchmark" / "test_ablation.md"
     
     class Args:
-        data_dir = "D:/fusion/LLVIP"
+        data_dir = "data/LLVIP"
         split = "test"
         img_size = [128, 128]
         batch_size = 2

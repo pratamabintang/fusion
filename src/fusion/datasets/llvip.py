@@ -74,6 +74,20 @@ def xywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
     return xyxy
 
 
+def _resolve_dataset_root(root: str | None = None) -> str:
+    """Resolve dataset directory path with data/ folder prioritization."""
+    if root is not None:
+        if os.path.exists(root):
+            return root
+        if os.path.exists(os.path.join("data", root)):
+            return os.path.join("data", root)
+        return root
+    for candidate in ["data/LLVIP", "D:/fusion/data/LLVIP", "LLVIP", "D:/fusion/LLVIP"]:
+        if os.path.exists(candidate):
+            return candidate
+    return "data/LLVIP"
+
+
 class LLVIPDataset(Dataset):
     """PyTorch Dataset for the LLVIP paired visible/thermal pedestrian dataset.
 
@@ -88,7 +102,7 @@ class LLVIPDataset(Dataset):
     """
 
     def __init__(self, root=None, split="train", img_size=(640, 640), transform=None, data_dir=None):
-        self.root = str(root or data_dir or "D:/fusion/LLVIP")
+        self.root = _resolve_dataset_root(root or data_dir)
         self.split = split
         self.img_size = img_size
         self.transform = transform
