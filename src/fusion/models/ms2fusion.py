@@ -200,7 +200,7 @@ class SPSSM(nn.Module):
         self.conv_t = nn.Conv2d(self.d_inner, self.d_inner, kernel_size=d_conv, padding=d_conv//2, groups=self.d_inner, bias=conv_bias)
         self.act = nn.SiLU()
         
-        self.x_proj_share = nn.Linear(self.d_inner, self.dt_rank + 2 * d_state, bias=False)
+        self.x_proj_share = nn.Linear(2 * self.d_inner, self.dt_rank + 2 * d_state, bias=False)
         self.dt_proj_s = nn.Linear(self.dt_rank, self.d_inner, bias=True)
         
         A = torch.arange(1, d_state + 1, dtype=torch.float32).repeat(self.d_inner, 1)
@@ -228,15 +228,15 @@ class SPSSM(nn.Module):
         x_t = self.act(self.conv_t(x_t))
         x_share_t = x_t.view(B, self.d_inner, L)
         
-        # Joint feature representation
-        x_joint = x_share_v + x_share_t
-        x_joint_proj_in = x_joint.transpose(1, 2)
+        # Joint feature representation via channel concatenation (F_V \oplus F_T)
+        x_joint = torch.cat([x_share_v, x_share_t], dim=1)  # (B, 2*d_inner, L)
+        x_joint_proj_in = x_joint.transpose(1, 2)  # (B, L, 2*d_inner)
         
-        share_proj = self.x_proj_share(x_joint_proj_in) # B, L, dt_rank + 2 * d_state
+        share_proj = self.x_proj_share(x_joint_proj_in)  # (B, L, dt_rank + 2 * d_state)
         dt_s, B_s, C_s = torch.split(share_proj, [self.dt_rank, self.d_state, self.d_state], dim=-1)
         
         dt_s = self.dt_proj_s(dt_s)
-        dt_s = dt_s.transpose(1, 2).contiguous() # B, d_inner, L
+        dt_s = dt_s.transpose(1, 2).contiguous()  # (B, d_inner, L)
         B_s = B_s.transpose(1, 2).contiguous()
         C_s = C_s.transpose(1, 2).contiguous()
         
@@ -266,26 +266,9 @@ class FFSSM(nn.Module):
     """Feature Fusion State Space Model (FF-SSM).
 
     Bidirectional state-space fusion block with cross-modal channel
-    squeeze-and-excitation (SE) gating. Scans paired feature streams, dynamically
-    scales their state representations using complementary channel attention, and
-    merges them into a unified feature representation.
-
-    Parameters
-    ----------
-    d_model : int
-        Channel dimension of the input feature maps.
-    d_state : int
-        State-space hidden dimension (default: 4).
-    ssm_ratio : float
-        Channel expansion ratio for inner SSM dimension (default: 2.0).
-    dt_rank : str or int
-        Rank of the delta projection. Defaults to 'auto' (ceil(d_model / 16)).
-    d_conv : int
-        Kernel size of depthwise convolution pre-filtering (default: 3).
-    conv_bias : bool
-        Whether to include bias in depthwise conv (default: True).
-    dropout : float
-        Dropout probability (default: 0.0).
+    squeeze-and-excitation (SE) gating. Executes bidirectional forward ([F1, F2])
+    and reverse ([F2, F1]) sequence scanning, dynamically scales representations
+    via complementary channel attention, and projects to output channels.
     """
 
     def __init__(
@@ -323,63 +306,67 @@ class FFSSM(nn.Module):
         self.D_1 = nn.Parameter(torch.ones(self.d_inner))
         self.D_2 = nn.Parameter(torch.ones(self.d_inner))
         
-        # Cross-Modal SE
+        # Cross-Modal SE Gating
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.mlp_1 = nn.Sequential(
             nn.Conv2d(self.d_inner, self.d_inner // 2, 1),
             nn.ReLU(),
             nn.Conv2d(self.d_inner // 2, self.d_inner, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
         self.mlp_2 = nn.Sequential(
             nn.Conv2d(self.d_inner, self.d_inner // 2, 1),
             nn.ReLU(),
             nn.Conv2d(self.d_inner // 2, self.d_inner, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
         
         self.out_proj = nn.Linear(2 * self.d_inner, d_model)
 
-    def forward(self, f1: torch.Tensor, f2: torch.Tensor) -> torch.Tensor:
-        B, C, H, W = f1.shape
+    def forward(self, feat_1: torch.Tensor, feat_2: torch.Tensor) -> torch.Tensor:
+        B, C, H, W = feat_1.shape
         L = H * W
         
-        x1 = f1.permute(0, 2, 3, 1).contiguous()
+        x1 = feat_1.permute(0, 2, 3, 1).contiguous()
         x1 = self.in_proj_1(x1).permute(0, 3, 1, 2).contiguous()
         x1 = self.act(self.conv_1(x1))
         
-        x2 = f2.permute(0, 2, 3, 1).contiguous()
+        x2 = feat_2.permute(0, 2, 3, 1).contiguous()
         x2 = self.in_proj_2(x2).permute(0, 3, 1, 2).contiguous()
         x2 = self.act(self.conv_2(x2))
         
         x1_flat = x1.view(B, self.d_inner, L)
         x2_flat = x2.view(B, self.d_inner, L)
         
-        # Scan 1
-        x1_proj_in = x1_flat.transpose(1, 2)
-        proj_1 = self.x_proj_1(x1_proj_in)
+        # Bidirectional Sequence Processing:
+        # Forward sequence: [F1, F2]
+        # Reverse sequence: [F2, F1]
+        x_fwd = torch.cat([x1_flat, x2_flat], dim=2)  # (B, d_inner, 2*L)
+        x_rev = torch.cat([x2_flat, x1_flat], dim=2)  # (B, d_inner, 2*L)
+        
+        # Forward scan
+        proj_1 = self.x_proj_1(x_fwd.transpose(1, 2))
         dt_1, B_1, C_1 = torch.split(proj_1, [self.dt_rank, self.d_state, self.d_state], dim=-1)
         dt_1 = self.dt_proj_1(dt_1).transpose(1, 2).contiguous()
         B_1 = B_1.transpose(1, 2).contiguous()
         C_1 = C_1.transpose(1, 2).contiguous()
         A_1 = -torch.exp(self.A_log_1)
-        y1 = selective_scan_fn(x1_flat, dt_1, A_1, B_1, C_1, self.D_1, delta_bias=self.dt_proj_1.bias, delta_softplus=True)
+        y_fwd = selective_scan_fn(x_fwd, dt_1, A_1, B_1, C_1, self.D_1, delta_bias=self.dt_proj_1.bias, delta_softplus=True)
         
-        # Scan 2
-        x2_proj_in = x2_flat.transpose(1, 2)
-        proj_2 = self.x_proj_2(x2_proj_in)
+        # Reverse scan
+        proj_2 = self.x_proj_2(x_rev.transpose(1, 2))
         dt_2, B_2, C_2 = torch.split(proj_2, [self.dt_rank, self.d_state, self.d_state], dim=-1)
         dt_2 = self.dt_proj_2(dt_2).transpose(1, 2).contiguous()
         B_2 = B_2.transpose(1, 2).contiguous()
         C_2 = C_2.transpose(1, 2).contiguous()
         A_2 = -torch.exp(self.A_log_2)
-        y2 = selective_scan_fn(x2_flat, dt_2, A_2, B_2, C_2, self.D_2, delta_bias=self.dt_proj_2.bias, delta_softplus=True)
+        y_rev = selective_scan_fn(x_rev, dt_2, A_2, B_2, C_2, self.D_2, delta_bias=self.dt_proj_2.bias, delta_softplus=True)
         
-        # Reshape y1, y2 back to H, W
-        y1 = y1.view(B, self.d_inner, H, W)
-        y2 = y2.view(B, self.d_inner, H, W)
+        # Extract respective sequence halves
+        y1 = y_fwd[:, :, :L].view(B, self.d_inner, H, W)
+        y2 = y_rev[:, :, :L].view(B, self.d_inner, H, W)
         
-        # SE gating
+        # Cross-Modal SE Gating
         e1 = self.mlp_1(self.pool(x1))
         e2 = self.mlp_2(self.pool(x2))
         
@@ -387,10 +374,10 @@ class FFSSM(nn.Module):
         y2 = y2 * e1
         
         # Concat and project
-        y = torch.cat([y1, y2], dim=1)  # B, 2*d_inner, H, W
+        y = torch.cat([y1, y2], dim=1)  # (B, 2*d_inner, H, W)
         y = y.permute(0, 2, 3, 1).contiguous()
         out = self.out_proj(y).permute(0, 3, 1, 2).contiguous()
-        return f1 + f2 + out
+        return feat_1 + feat_2 + out
 
 
 class MS2FusionBlock(nn.Module):

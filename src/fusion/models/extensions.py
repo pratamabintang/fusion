@@ -187,7 +187,7 @@ class ICSSMBlock(nn.Module):
         dt_t, B_t, C_t = torch.split(proj_t, [math.ceil(self.d_model / 16), self.d_state, self.d_state], dim=-1)
         dt_t = self.dt_proj_t(dt_t).transpose(1, 2).contiguous()
         
-        # Modulate Delta
+        # Modulate Delta and A transition parameters based on illumination gating
         dt_v = dt_v * (0.5 + alpha_flat)
         dt_t = dt_t * (1.5 - alpha_flat)
         
@@ -196,8 +196,9 @@ class ICSSMBlock(nn.Module):
         B_t = B_t.transpose(1, 2).contiguous()
         C_t = C_t.transpose(1, 2).contiguous()
         
-        A_v = -torch.exp(self.A_log_v)
-        A_t = -torch.exp(self.A_log_t)
+        alpha_scale = alpha.mean()
+        A_v = -torch.exp(self.A_log_v) * (0.5 + alpha_scale)
+        A_t = -torch.exp(self.A_log_t) * (1.5 - alpha_scale)
         
         x_v_in = x_v.transpose(1, 2).contiguous() + mem_cond
         x_t_in = x_t.transpose(1, 2).contiguous() + mem_cond

@@ -33,26 +33,31 @@ class Trainer:
         self.model.train()
         loss_dict = {}
         
+        device_type = 'cuda' if torch.cuda.is_available() and self.device.startswith('cuda') else 'cpu'
         for batch_idx, batch in enumerate(self.train_loader):
-            vis, therm, targets, metas = batch
-            vis = vis.to(self.device)
-            therm = therm.to(self.device)
+            feat_v, feat_t, targets, metas = batch
+            feat_v = feat_v.to(self.device)
+            feat_t = feat_t.to(self.device)
             targets = targets.to(self.device)
             
             self.optimizer.zero_grad()
             
             if self.amp:
-                # Use amp package properly
-                with autocast(enabled=torch.cuda.is_available()):
-                    loss, losses = self.model(vis, therm, targets)
+                with torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16):
+                    loss, losses = self.model(feat_v, feat_t, targets)
                 
-                self.scaler.scale(loss).backward()
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
+                if self.scaler and self.scaler.is_enabled():
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                    self.optimizer.step()
             else:
-                loss, losses = self.model(vis, therm, targets)
+                loss, losses = self.model(feat_v, feat_t, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
                 self.optimizer.step()
