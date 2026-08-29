@@ -160,3 +160,55 @@ class LLVIPDataset(Dataset):
 
         return visible_tensor, thermal_tensor, target, image_meta
 
+def collate_fn(batch):
+    """
+    Collate function for LLVIP dataset.
+    batch is list of tuples: (visible_tensor, thermal_tensor, target, image_meta)
+    Returns:
+        vis_batch: (B, 3, H, W)
+        therm_batch: (B, 3, H, W)
+        targets: (N, 6) -> [image_idx, class_id, x_c, y_c, w, h]
+        metas: list of image_meta
+    """
+    vis_batch = []
+    therm_batch = []
+    targets = []
+    metas = []
+    
+    for i, (v, t, target, meta) in enumerate(batch):
+        vis_batch.append(v)
+        therm_batch.append(t)
+        metas.append(meta)
+        
+        boxes = target['boxes'] # (n, 4) xyxy
+        labels = target['labels'] # (n,)
+        
+        if boxes.shape[0] > 0:
+            # Convert xyxy to xywh
+            xywh = xyxy_to_xywh(boxes)
+            
+            # Normalize to [0, 1] using img_size from meta
+            h, w = meta['img_size']
+            xywh[:, 0] /= w
+            xywh[:, 2] /= w
+            xywh[:, 1] /= h
+            xywh[:, 3] /= h
+            
+            # Create (n, 6) tensor
+            img_idx = torch.full((boxes.shape[0], 1), i, dtype=torch.float32)
+            cls_id = labels.unsqueeze(1).float()
+            
+            tgt = torch.cat((img_idx, cls_id, xywh), dim=1)
+            targets.append(tgt)
+            
+    vis_batch = torch.stack(vis_batch, dim=0)
+    therm_batch = torch.stack(therm_batch, dim=0)
+    
+    if len(targets) > 0:
+        targets = torch.cat(targets, dim=0)
+    else:
+        targets = torch.zeros((0, 6), dtype=torch.float32)
+        
+    return vis_batch, therm_batch, targets, metas
+
+
