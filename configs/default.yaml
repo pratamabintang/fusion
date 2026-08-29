@@ -1,0 +1,15 @@
+data_dir: "D:/fusion/LLVIP"
+img_size: [640, 640]
+batch_size: 8
+epochs: 50
+lr: 0.001
+weight_decay: 0.0005
+momentum: 0.937
+device: "cuda"
+amp: true
+fusion_type: "ms2fusion"
+base_channels: 64
+base_depth: 3
+ssm_ratio: 2.0
+d_state: 4
+save_dir: "runs/train"

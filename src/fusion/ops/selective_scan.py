@@ -48,6 +48,7 @@ def selective_scan_ref(
     D: torch.Tensor | None = None,
     delta_bias: torch.Tensor | None = None,
     delta_softplus: bool = False,
+    z: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Vectorized CPU reference for the selective scan operator.
 
@@ -61,6 +62,7 @@ def selective_scan_ref(
     D : Tensor (D,), optional  — skip-connection coefficient
     delta_bias : Tensor (D,), optional — additive bias on delta
     delta_softplus : bool      — apply softplus to delta after bias
+    z : Tensor (B, D, L), optional — skip-connection/gate
 
     Returns
     -------
@@ -115,6 +117,9 @@ def selective_scan_ref(
 
     if D is not None:
         y = y + u * D.unsqueeze(1)
+        
+    if z is not None:
+        y = y * F.silu(z.to(compute_dtype))
 
     return y.to(dtype=dtype_in)
 
@@ -133,14 +138,17 @@ class _SelectiveScanCUDA(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, u, delta, A, B, C, D=None, delta_bias=None, delta_softplus=False):
+    def forward(ctx, u, delta, A, B, C, D=None, delta_bias=None, delta_softplus=False, z=None):
         try:
             import selective_scan_cuda_core as cuda_ext
-        except ImportError as exc:
-            raise RuntimeError(
-                "selective_scan_cuda_core is not installed. "
-                "Use selective_scan_ref for CPU execution."
-            ) from exc
+        except ImportError:
+            try:
+                import fusion.selective_scan_cuda_core as cuda_ext
+            except ImportError as exc:
+                raise RuntimeError(
+                    "selective_scan_cuda_core is not installed. "
+                    "Use selective_scan_ref for CPU execution."
+                ) from exc
 
         if u.stride(-1) != 1:
             u = u.contiguous()
@@ -152,6 +160,8 @@ class _SelectiveScanCUDA(torch.autograd.Function):
             C = C.contiguous()
         if D is not None:
             D = D.contiguous().float()
+        if z is not None and z.stride(-1) != 1:
+            z = z.contiguous()
         if delta_bias is not None:
             delta_bias = delta_bias.contiguous().float()
 
@@ -160,30 +170,33 @@ class _SelectiveScanCUDA(torch.autograd.Function):
         if C.dim() == 3:
             C = C.unsqueeze(1)  # (B, 1, N, L)
 
-        out, x, *rest = cuda_ext.fwd(
-            u, delta, A, B, C, D, delta_bias, delta_softplus, 1,
+        out, x, *rest = cuda_ext.selective_scan_fwd_cuda(
+            u, delta, A, B, C, D, z, delta_bias, delta_softplus
         )
         ctx.delta_softplus = delta_softplus
-        ctx.save_for_backward(u, delta, A, B, C, D, delta_bias, x)
+        ctx.save_for_backward(u, delta, A, B, C, D, z, delta_bias, x)
         return out
 
     @staticmethod
     def backward(ctx, dout):
         try:
             import selective_scan_cuda_core as cuda_ext
-        except ImportError as exc:
-            raise RuntimeError(
-                "selective_scan_cuda_core is not installed."
-            ) from exc
+        except ImportError:
+            try:
+                import fusion.selective_scan_cuda_core as cuda_ext
+            except ImportError as exc:
+                raise RuntimeError(
+                    "selective_scan_cuda_core is not installed."
+                ) from exc
 
-        u, delta, A, B, C, D, delta_bias, x = ctx.saved_tensors
+        u, delta, A, B, C, D, z, delta_bias, x = ctx.saved_tensors
         if dout.stride(-1) != 1:
             dout = dout.contiguous()
-        du, ddelta, dA, dB, dC, dD, ddelta_bias, *_ = cuda_ext.bwd(
-            u, delta, A, B, C, D, delta_bias, dout, x,
-            ctx.delta_softplus, 1,
+        du, ddelta, dA, dB, dC, dD, dz, ddelta_bias, *_ = cuda_ext.selective_scan_bwd_cuda(
+            u, delta, A, B, C, D, z, delta_bias, dout, x, None,
+            ctx.delta_softplus
         )
-        return du, ddelta, dA, dB, dC, dD, ddelta_bias, None
+        return du, ddelta, dA, dB, dC, dD, ddelta_bias, None, dz
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +212,7 @@ def selective_scan_fn(
     D: torch.Tensor | None = None,
     delta_bias: torch.Tensor | None = None,
     delta_softplus: bool = False,
+    z: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Hardware-aware dispatcher for the selective scan operator.
 
@@ -212,10 +226,14 @@ def selective_scan_fn(
             import selective_scan_cuda_core  # noqa: F401
             use_cuda = True
         except ImportError:
-            pass
+            try:
+                import fusion.selective_scan_cuda_core  # noqa: F401
+                use_cuda = True
+            except ImportError:
+                pass
 
     if use_cuda:
         return _SelectiveScanCUDA.apply(
-            u, delta, A, B, C, D, delta_bias, delta_softplus,
+            u, delta, A, B, C, D, delta_bias, delta_softplus, z,
         )
-    return selective_scan_ref(u, delta, A, B, C, D, delta_bias, delta_softplus)
+    return selective_scan_ref(u, delta, A, B, C, D, delta_bias, delta_softplus, z)
