@@ -172,7 +172,13 @@ class Evaluator:
         stats = []
 
         with torch.no_grad():
-            for batch in self.val_loader:
+            try:
+                from tqdm import tqdm
+                val_iter = tqdm(self.val_loader, desc="Validating", ncols=110, leave=False)
+            except ImportError:
+                val_iter = self.val_loader
+
+            for batch in val_iter:
                 vis, therm, targets, metas = batch
                 vis = vis.to(self.device)
                 therm = therm.to(self.device)

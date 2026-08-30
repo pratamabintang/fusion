@@ -99,6 +99,9 @@ def train(cfg: dict) -> dict:
             model.load_state_dict(model_dict)
             print(f"[+] Successfully loaded {len(pretrained_dict)}/{len(model_dict)} matching layers from {weights_path}")
             
+    print(f"[+] Dataset: {len(train_dataset)} train samples ({len(train_loader)} batches), {len(val_dataset)} val samples ({len(val_loader)} batches)")
+    print(f"[+] Device: {device} | Mixed Precision (AMP): {cfg.get('amp', True)} | Batch Size: {batch_size}")
+    
     evaluator = Evaluator(model, val_loader, device=device)
     trainer = Trainer(
         model=model,
@@ -112,13 +115,14 @@ def train(cfg: dict) -> dict:
     
     best_map = -1.0
     history = []
+    total_epochs = cfg.get("epochs", 50)
     
     results_csv_path = save_dir / "results.csv"
     with open(results_csv_path, "w", encoding="utf-8") as f:
         f.write("epoch,train_loss,val_mAP_0.5,val_mAP_0.5_0.95,precision,recall\n")
         
-    for epoch in range(1, cfg.get("epochs", 50) + 1):
-        loss_dict = trainer.train_one_epoch()
+    for epoch in range(1, total_epochs + 1):
+        loss_dict = trainer.train_one_epoch(epoch=epoch, total_epochs=total_epochs)
         train_loss = loss_dict.get("total_loss", 0.0)
         
         val_metrics = evaluator()
@@ -136,7 +140,8 @@ def train(cfg: dict) -> dict:
         with open(results_csv_path, "a", encoding="utf-8") as f:
             f.write(f"{epoch},{train_loss:.6f},{map50:.4f},{map95:.4f},{prec:.4f},{rec:.4f}\n")
             
-        if map50 > best_map:
+        is_best = map50 > best_map
+        if is_best:
             best_map = map50
             torch.save({
                 "epoch": epoch,
@@ -151,6 +156,8 @@ def train(cfg: dict) -> dict:
             "metrics": val_metrics,
             "config": cfg,
         }, str(weights_dir / "last.pt"))
+
+        print(f"[Epoch {epoch:2d}/{total_epochs}] Train Loss: {train_loss:.4f} | Val mAP@0.5: {map50*100:.2f}% | Val mAP@0.5:0.95: {map95*100:.2f}%{' -> (Saved Best Checkpoint)' if is_best else ''}")
     
     # Final evaluation
     final_metrics = val_metrics if len(history) > 0 else evaluator()
