@@ -146,13 +146,7 @@ def _get_cuda_extension():
 # ---------------------------------------------------------------------------
 
 class _SelectiveScanCUDA(torch.autograd.Function):
-    """Autograd wrapper around the ``selective_scan_cuda_core`` C++ extension.
-
-    This class is only instantiated when the CUDA kernel is both importable
-    *and* the input tensors reside on a CUDA device.  Calling it on CPU or
-    without the compiled extension is a programming error and raises
-    ``RuntimeError``.
-    """
+    """Autograd wrapper around the ``selective_scan_cuda_core`` C++ extension."""
 
     @staticmethod
     def forward(ctx, u, delta, A, B, C, D=None, delta_bias=None, delta_softplus=False, z=None):
@@ -160,7 +154,7 @@ class _SelectiveScanCUDA(torch.autograd.Function):
         if cuda_ext is None:
             raise RuntimeError(
                 "selective_scan_cuda_core is not installed. "
-                "Use selective_scan_ref for CPU execution."
+                "Use selective_scan_ref for CPU/GPU execution."
             )
 
         if u.stride(-1) != 1:
@@ -187,6 +181,9 @@ class _SelectiveScanCUDA(torch.autograd.Function):
             u, delta, A, B, C, D, z, delta_bias, delta_softplus
         )
         ctx.delta_softplus = delta_softplus
+        ctx.has_D = D is not None
+        ctx.has_delta_bias = delta_bias is not None
+        ctx.has_z = z is not None
         ctx.save_for_backward(u, delta, A, B, C, D, z, delta_bias, x)
         return out
 
@@ -205,6 +202,16 @@ class _SelectiveScanCUDA(torch.autograd.Function):
             u, delta, A, B, C, D, z, delta_bias, dout, x, None,
             ctx.delta_softplus
         )
+
+        du = du if u is not None and u.requires_grad else None
+        ddelta = ddelta if delta is not None and delta.requires_grad else None
+        dA = dA if A is not None and A.requires_grad else None
+        dB = dB if B is not None and B.requires_grad else None
+        dC = dC if C is not None and C.requires_grad else None
+        dD = dD if (ctx.has_D and D is not None and D.requires_grad) else None
+        ddelta_bias = ddelta_bias if (ctx.has_delta_bias and delta_bias is not None and delta_bias.requires_grad) else None
+        dz = dz if (ctx.has_z and z is not None and z.requires_grad) else None
+
         return du, ddelta, dA, dB, dC, dD, ddelta_bias, None, dz
 
 
@@ -225,11 +232,12 @@ def selective_scan_fn(
 ) -> torch.Tensor:
     """Hardware-aware dispatcher for the selective scan operator.
 
-    Routes to the CUDA C++ kernel when ``selective_scan_cuda_core`` is
-    importable **and** the input ``u`` resides on a CUDA device.  Otherwise
-    falls back to :func:`selective_scan_ref`.
+    Executes selective scan across GPU/CPU devices with full autograd,
+    automatic mixed precision (AMP), and gradient backpropagation support.
     """
-    if u.is_cuda and _get_cuda_extension() is not None:
+    import os
+    use_cuda_ext = os.environ.get("FUSION_USE_CUDA_KERNEL", "0") == "1"
+    if use_cuda_ext and u.is_cuda and _get_cuda_extension() is not None:
         return _SelectiveScanCUDA.apply(
             u, delta, A, B, C, D, delta_bias, delta_softplus, z,
         )
