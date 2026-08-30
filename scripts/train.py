@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
@@ -34,6 +35,7 @@ def parse_args():
     parser.add_argument("--base-depth", type=int, help="Base depth multiplier for backbone")
     parser.add_argument("--ssm-ratio", type=float, help="SSM channel expansion ratio")
     parser.add_argument("--d-state", type=int, help="SSM state dimension")
+    parser.add_argument("--workers", type=int, default=None, help="DataLoader num_workers")
     return parser.parse_args()
 
 
@@ -59,6 +61,11 @@ def train(cfg: dict) -> dict:
         
     data_dir = cfg.get("data_dir", "data/LLVIP")
     batch_size = cfg.get("batch_size", 8)
+    default_workers = 0 if ("pytest" in sys.modules or os.name == "nt") else min(os.cpu_count() or 4, 8)
+    num_workers = cfg.get("workers", default_workers)
+    if num_workers is None:
+        num_workers = default_workers
+    is_cuda = device.startswith("cuda")
     
     train_dataset = LLVIPDataset(data_dir=data_dir, split="train", img_size=img_size)
     val_dataset = LLVIPDataset(data_dir=data_dir, split="test", img_size=img_size)
@@ -68,6 +75,9 @@ def train(cfg: dict) -> dict:
         batch_size=batch_size,
         shuffle=True,
         collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=is_cuda,
+        persistent_workers=True if num_workers > 0 else False,
         drop_last=True if len(train_dataset) > batch_size else False,
     )
     val_loader = DataLoader(
@@ -75,6 +85,9 @@ def train(cfg: dict) -> dict:
         batch_size=batch_size,
         shuffle=False,
         collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=is_cuda,
+        persistent_workers=True if num_workers > 0 else False,
     )
     
     # Build model
