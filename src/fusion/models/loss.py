@@ -3,7 +3,12 @@ import torch.nn as nn
 import math
 
 def bbox_iou(box1, box2, xywh=True, CIoU=True, eps=1e-7):
-    # Returns the IoU of box1 to box2. box1 is 4, box2 is nx4
+    # Returns the IoU of box1 to box2. Ensure shape is (..., 4)
+    if box1.shape[-1] != 4 and box1.dim() == 2 and box1.shape[0] == 4:
+        box1 = box1.T
+    if box2.shape[-1] != 4 and box2.dim() == 2 and box2.shape[0] == 4:
+        box2 = box2.T
+
     if xywh:
         # Transform from center and width to exact coordinates
         b1_x1, b1_x2 = box1[..., 0] - box1[..., 2] / 2, box1[..., 0] + box1[..., 2] / 2
@@ -80,7 +85,7 @@ class YOLOLoss(nn.Module):
                 pwh = (ps[:, 2:4].sigmoid() * 2) ** 2 * anchors[i]
                 pbox = torch.cat((pxy, pwh), 1)
                 
-                iou = bbox_iou(pbox.T, tbox[i], xywh=True, CIoU=True)
+                iou = bbox_iou(pbox, tbox[i], xywh=True, CIoU=True)
                 lbox += (1.0 - iou).mean()
                 
                 # Objectness

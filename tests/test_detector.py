@@ -113,6 +113,7 @@ def test_yolo_loss_computation():
     f_p5 = torch.randn(B, 1024, H // 4, W // 4)
     preds = head([f_p3, f_p4, f_p5])
     
+    # Test with 2 targets
     targets = torch.tensor([
         [0, 0, 0.5, 0.5, 0.1, 0.1],
         [1, 0, 0.2, 0.3, 0.05, 0.05]
@@ -126,6 +127,14 @@ def test_yolo_loss_computation():
     assert 'loss_obj' in loss_dict
     assert 'loss_cls' in loss_dict
     assert 'total_loss' in loss_dict
+
+    # Test with realistic dense batch targets (e.g. N=29 targets across images)
+    dense_targets = torch.zeros(29, 6)
+    dense_targets[:, 0] = torch.randint(0, B, (29,))
+    dense_targets[:, 2:6] = torch.rand(29, 4) * 0.5 + 0.1
+    loss_dense, _ = loss_fn(preds, dense_targets)
+    assert isinstance(loss_dense, torch.Tensor)
+    assert loss_dense.requires_grad
 
 from fusion.models.detector import MS2FusionDetector
 
