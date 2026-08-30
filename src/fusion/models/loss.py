@@ -36,17 +36,22 @@ def bbox_iou(box1, box2, xywh=True, CIoU=True, eps=1e-7):
         return iou - (rho2 / c2 + v * alpha)
     return iou
 
-class YOLOLoss:
+class YOLOLoss(nn.Module):
     def __init__(self, model, nc=1, hyp=None):
+        super().__init__()
         self.nc = nc
         self.bce_cls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1.0]))
         self.bce_obj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1.0]))
         
         # balances for obj loss: P3, P4, P5
         self.balance = [4.0, 1.0, 0.4]
+        self.head = model
         self.anchors = model.anchors
         self.nl = model.nl
         self.na = model.na
+
+    def forward(self, p, targets):
+        return self.__call__(p, targets)
 
     def __call__(self, p, targets):
         # p is list of predictions from each layer
@@ -55,6 +60,11 @@ class YOLOLoss:
         lbox = torch.zeros(1, device=device)
         lobj = torch.zeros(1, device=device)
         
+        if self.bce_cls.pos_weight.device != device:
+            self.bce_cls.pos_weight = self.bce_cls.pos_weight.to(device)
+        if self.bce_obj.pos_weight.device != device:
+            self.bce_obj.pos_weight = self.bce_obj.pos_weight.to(device)
+
         tcls, tbox, indices, anchors = self.build_targets(p, targets)
 
         for i, pi in enumerate(p):  # layer index, layer predictions
@@ -98,19 +108,22 @@ class YOLOLoss:
 
     def build_targets(self, p, targets):
         # Targets shape: (nt, 6) -> image_idx, class_id, x, y, w, h
+        device = targets.device
         na, nt = self.na, targets.shape[0]
         tcls, tbox, indices, anch = [], [], [], []
-        gain = torch.ones(7, device=targets.device)
-        ai = torch.arange(na, device=targets.device).float().view(na, 1).repeat(1, nt)
+        gain = torch.ones(7, device=device)
+        ai = torch.arange(na, device=device).float().view(na, 1).repeat(1, nt)
         targets = torch.cat((targets.repeat(na, 1, 1), ai[:, :, None]), 2)
         
         g = 0.5
         off = torch.tensor([[0, 0],
-                            [1, 0], [0, 1], [-1, 0], [0, -1]], device=targets.device).float() * g
+                            [1, 0], [0, 1], [-1, 0], [0, -1]], device=device).float() * g
         
+        all_anchors = (self.head.anchors if hasattr(self.head, "anchors") else self.anchors).to(device)
+
         for i in range(self.nl):
-            anchors = self.anchors[i]
-            gain[2:6] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain
+            anchors = all_anchors[i]
+            gain[2:6] = torch.tensor(p[i].shape, device=device)[[3, 2, 3, 2]]  # xyxy gain
             
             t = targets * gain
             if nt:

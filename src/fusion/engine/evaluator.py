@@ -36,7 +36,7 @@ def non_max_suppression(
         Each tensor contains [x1, y1, x2, y2, conf, class_id] for an image.
     """
     bs = prediction.shape[0]
-    output = [torch.zeros((0, 6), device=prediction.device)] * bs
+    output = [torch.zeros((0, 6), device=prediction.device) for _ in range(bs)]
 
     for xi, x in enumerate(prediction):
         conf = x[:, 4] * x[:, 5:].max(1)[0]

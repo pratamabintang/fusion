@@ -1,5 +1,4 @@
 import torch
-from torch.cuda.amp import autocast, GradScaler
 from fusion.engine.evaluator import Evaluator
 
 class Trainer:
@@ -7,7 +6,7 @@ class Trainer:
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.device = device
+        self.device = str(device)
         self.epochs = epochs
         self.amp = amp
         
@@ -18,9 +17,11 @@ class Trainer:
             
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=epochs)
         
-        if self.amp:
-            # Check if CUDA is available for amp scaler
-            self.scaler = GradScaler(enabled=torch.cuda.is_available())
+        if self.amp and torch.cuda.is_available() and self.device.startswith('cuda'):
+            try:
+                self.scaler = torch.amp.GradScaler('cuda', enabled=True)
+            except Exception:
+                self.scaler = torch.cuda.amp.GradScaler(enabled=True)
         else:
             self.scaler = None
             
