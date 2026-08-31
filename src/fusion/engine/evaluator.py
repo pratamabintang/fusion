@@ -174,7 +174,7 @@ class Evaluator:
         with torch.no_grad():
             try:
                 from tqdm import tqdm
-                val_iter = tqdm(self.val_loader, desc="Validating", ncols=110, leave=False)
+                val_iter = tqdm(self.val_loader, desc="Validating", dynamic_ncols=True, leave=True)
             except ImportError:
                 val_iter = self.val_loader
 

@@ -49,7 +49,7 @@ class Trainer:
                 enumerate(self.train_loader),
                 total=len(self.train_loader),
                 desc=f"Epoch {epoch:2d}/{total_epochs}",
-                ncols=110,
+                dynamic_ncols=True,
                 leave=True,
             )
         except ImportError:
@@ -86,14 +86,14 @@ class Trainer:
             for k, v in losses.items():
                 loss_dict[k] = loss_dict.get(k, 0.0) + (v.item() if isinstance(v, torch.Tensor) else float(v))
                 
-            if hasattr(pbar, "set_postfix") and batch_idx % 10 == 0:
+            if hasattr(pbar, "set_postfix"):
                 lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     "loss": f"{loss.item():.4f}",
                     "box": f"{losses.get('loss_box', 0.0):.3f}",
                     "obj": f"{losses.get('loss_obj', 0.0):.3f}",
                     "lr": f"{lr:.5f}",
-                })
+                }, refresh=(batch_idx % 5 == 0 or batch_idx == len(self.train_loader) - 1))
                 
         # Average losses
         for k in loss_dict.keys():
