@@ -8,6 +8,13 @@ from fusion.models.extensions import (
     MSSSMBlock,
     MultiScaleMemoryFusion,
 )
+from fusion.models.fusion import (
+    MultiScaleFusion,
+    BaselineMS2FusionAdapter,
+    MultiScaleMemoryAdapter,
+    IlluminationAdaptiveAdapter,
+    CombinedAdapter,
+)
 from fusion.models.head import Detect
 from fusion.models.loss import YOLOLoss, bbox_iou
 from fusion.models.ms2fusion import CPSSM, FFSSM, SPSSM, MS2FusionBlock
@@ -22,6 +29,11 @@ __all__ = [
     "MS2FusionBlock",
     "MSSSMBlock",
     "MultiScaleMemoryFusion",
+    "MultiScaleFusion",
+    "BaselineMS2FusionAdapter",
+    "MultiScaleMemoryAdapter",
+    "IlluminationAdaptiveAdapter",
+    "CombinedAdapter",
     "AdaptiveGatingModule",
     "ICSSMBlock",
     "PANet",

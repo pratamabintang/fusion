@@ -16,6 +16,7 @@ Use these precise terms consistently across code, tests, documentation, and issu
 - **SP-SSM (Shared-Parametric State Space Model)**: A state-space branch learning modality-invariant shared representations by deriving shared parameters ($\Delta_s, B_s, C_s$) from joint feature embeddings.
 - **FF-SSM (Feature Fusion State Space Model)**: A bidirectional state-space fusion block that processes forward ($[F_1, F_2]$) and reverse ($[F_2, F_1]$) sequences with channel excitation to mitigate feature forgetting and adaptively combine multi-modal features.
 - **MS2Fusion Block**: The hierarchical fusion module combining CP-SSM, SP-SSM, and FF-SSM at multi-scale feature stages ($P_3, P_4, P_5$).
+- **Multi-Scale Feature Fusion Module**: The deep module placed at the seam between the two-stream backbone and the PANet neck that encapsulates multi-scale fusion across all four model variants (`ms2fusion`, `ms_ssm`, `ic_ssm`, `combined`) behind a unified pyramid interface.
 - **Two-Stream Detector Backbone**: Parallel feature extraction networks for RGB and Thermal streams that feed into multi-level fusion blocks prior to the neck and detection head.
 - **Selective Scan Operator**: The continuous-to-discrete state-space recurrent/convolutional scan operator (with CUDA-accelerated kernel and pure PyTorch CPU/fallback implementation).
 - **Baseline Model (Pure MS2Fusion)**: Exact paper replication using standard MS2Fusion blocks at $P_3, P_4, P_5$ without state memory propagation or illumination modulation (`fusion_type='ms2fusion'`).
