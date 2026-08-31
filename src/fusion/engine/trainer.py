@@ -17,9 +17,19 @@ class Trainer:
             
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=epochs)
         
-        # bfloat16 has full fp32 dynamic range — no GradScaler needed.
-        # Only use GradScaler for float16 AMP.
+        # Adaptive AMP configuration based on GPU hardware capabilities
+        self.amp_dtype = torch.float32
         self.scaler = None
+        if self.amp and torch.cuda.is_available() and self.device.startswith('cuda'):
+            if hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported():
+                self.amp_dtype = torch.bfloat16
+                self.scaler = None
+            else:
+                self.amp_dtype = torch.float16
+                try:
+                    self.scaler = torch.amp.GradScaler('cuda', enabled=True)
+                except Exception:
+                    self.scaler = torch.cuda.amp.GradScaler(enabled=True)
             
         if self.val_loader is not None:
             self.evaluator = Evaluator(model, val_loader, device=device)
@@ -53,12 +63,20 @@ class Trainer:
             
             self.optimizer.zero_grad(set_to_none=True)
             
-            if self.amp:
-                with torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16):
+            if self.amp and device_type == 'cuda':
+                with torch.amp.autocast(device_type='cuda', dtype=self.amp_dtype):
                     loss, losses = self.model(feat_v, feat_t, targets)
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
-                self.optimizer.step()
+                
+                if self.scaler is not None and self.scaler.is_enabled():
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                    self.optimizer.step()
             else:
                 loss, losses = self.model(feat_v, feat_t, targets)
                 loss.backward()

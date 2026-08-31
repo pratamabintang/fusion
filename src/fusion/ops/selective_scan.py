@@ -6,9 +6,11 @@ Implements the continuous-to-discrete selective state-space scan:
 
 where Ā = exp(Δ·A), B̄ = Δ·B (ZOH discretization).
 
-Uses a parallel associative scan with O(L) work and O(log L) depth,
-executing entirely through batched tensor operations with zero Python
-loops. All computation stays on GPU with full autograd support.
+Uses a parallel associative prefix scan (Blelloch / Hillis-Steele formulation)
+with binary composition operator (a2, b2) ∘ (a1, b1) = (a2·a1, a2·b1 + b2).
+This requires only ceil(log2 L) vectorized parallel steps, avoids any division
+or exp(-S) terms, has zero Python loops over individual sequence elements,
+and is completely numerically stable across all sequence lengths.
 """
 
 import os
@@ -33,53 +35,48 @@ def _expand_groups(tensor: torch.Tensor, dim: int) -> torch.Tensor:
 
 
 # ---------------------------------------------------------------------------
-# Parallel Associative Scan (zero Python loops)
+# Parallel Associative Scan (Zero Division, Strictly Bounded, Numerically Stable)
 # ---------------------------------------------------------------------------
 
-def _parallel_scan(log_coeffs: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
-    """Numerically stable parallel associative scan using log-space coefficients.
+def _associative_scan(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """Parallel associative prefix scan for linear recurrence h_t = a_t * h_{t-1} + b_t.
 
-    Implements x_t = a_t * x_{t-1} + b_t in parallel using:
-        x_t = sum_{j=0}^{t} exp(S_t - S_j) * b_j
-
-    Uses local normalization to prevent exp overflow/underflow.
+    Uses binary composition: (a2, b2) ∘ (a1, b1) = (a2 * a1, a2 * b1 + b2).
+    Takes ceil(log2 L) parallel vectorized tensor operations along the sequence dimension.
+    Because a_t = exp(Delta * A) <= 1, intermediate multiplicative coefficients
+    remain strictly bounded in (0, 1], guaranteeing numerical stability with zero NaN/Inf.
 
     Parameters
     ----------
-    log_coeffs : (B, D, L, N) — log of multiplicative coefficients (log a_t)
-    values     : (B, D, L, N) — additive values (b_t)
+    a : torch.Tensor
+        Shape ``(B, D, L, N)`` — multiplicative decay coefficients a_t = exp(Delta * A).
+    b : torch.Tensor
+        Shape ``(B, D, L, N)`` — additive input values b_t = Delta * B * u.
 
     Returns
     -------
-    x : (B, D, L, N) — all hidden states
+    torch.Tensor
+        Shape ``(B, D, L, N)`` — all hidden states h_t.
     """
-    # Cumulative sum of log-coefficients: S_t = sum_{k=0}^{t} log(a_k)
-    S = torch.cumsum(log_coeffs, dim=2)  # (B, D, L, N)
+    L = a.shape[2]
+    curr_a = a
+    curr_b = b
+    stride = 1
 
-    # For numerical stability, normalize relative to the current position:
-    # x_t = sum_{j=0}^{t} exp(S_t - S_j) * b_j
-    #     = exp(S_t) * sum_{j=0}^{t} exp(-S_j) * b_j
-    #
-    # To avoid overflow in exp(S_t), we compute exp(S_t - max_S_t) and absorb
-    # the max into the cumulative sum term.
-    #
-    # However, since A is always negative (stable SSM), S is monotonically
-    # decreasing, so exp(-S_j) grows. Instead, use the factored form directly
-    # with clamping for safety.
+    while stride < L:
+        a_left = curr_a[:, :, :-stride]
+        b_left = curr_b[:, :, :-stride]
+        a_right = curr_a[:, :, stride:]
+        b_right = curr_b[:, :, stride:]
 
-    # Clamp S to prevent exp overflow (S values beyond ±80 cause fp32 inf)
-    S_clamped = S.clamp(-80.0, 80.0)
+        a_new = a_right * a_left
+        b_new = a_right * b_left + b_right
 
-    # b_j * exp(-S_j): undo accumulated decay at each source position
-    corrected = values * torch.exp(-S_clamped)
+        curr_a = torch.cat([curr_a[:, :, :stride], a_new], dim=2)
+        curr_b = torch.cat([curr_b[:, :, :stride], b_new], dim=2)
+        stride *= 2
 
-    # Accumulate corrected values
-    cum_corrected = torch.cumsum(corrected, dim=2)
-
-    # Apply accumulated decay to get final states
-    x = torch.exp(S_clamped) * cum_corrected
-
-    return x
+    return curr_b
 
 
 def _selective_scan_parallel(
@@ -94,9 +91,6 @@ def _selective_scan_parallel(
     z: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Fully parallel selective scan using associative scan.
-
-    Zero Python loops. All computation is batched tensor ops that
-    saturate GPU cores. Works on both CPU and CUDA.
 
     Parameters
     ----------
@@ -116,46 +110,46 @@ def _selective_scan_parallel(
     """
     dtype_in = u.dtype
     compute_dtype = torch.float64 if u.dtype == torch.float64 else torch.float32
-    u = u.to(compute_dtype)
-    delta = delta.to(compute_dtype)
+    u_c = u.to(compute_dtype)
+    delta_c = delta.to(compute_dtype)
 
     if delta_bias is not None:
-        delta = delta + delta_bias.unsqueeze(-1).to(compute_dtype)
+        delta_c = delta_c + delta_bias.unsqueeze(-1).to(compute_dtype)
     if delta_softplus:
-        delta = F.softplus(delta)
+        delta_c = F.softplus(delta_c)
 
-    A = A.to(compute_dtype)
-    B = B.to(compute_dtype)
-    C = C.to(compute_dtype)
+    A_c = A.to(compute_dtype)
+    B_c = B.to(compute_dtype)
+    C_c = C.to(compute_dtype)
 
-    batch, dim, L = u.shape
-    dstate = A.shape[1]
+    batch, dim, L = u_c.shape
+    dstate = A_c.shape[1]
 
-    # log(Ā) = Δ·A  (A is already in log-space from nn.Parameter)
-    # log_coeffs: (B, D, L, N)
-    log_coeffs = torch.einsum('bdl,dn->bdln', delta, A)
+    # log(Ā) = Δ·A  (A is negative from nn.Parameter)
+    log_coeffs = torch.einsum('bdl,dn->bdln', delta_c, A_c)
+    a = torch.exp(log_coeffs)
 
     # B̄·u = Δ·B·u: (B, D, L, N)
-    if B.dim() == 3:
-        values = torch.einsum('bdl,bnl,bdl->bdln', delta, B, u)
+    if B_c.dim() == 3:
+        b = torch.einsum('bdl,bnl,bdl->bdln', delta_c, B_c, u_c)
     else:
-        B_expanded = _expand_groups(B, dim)
-        values = torch.einsum('bdl,bdnl,bdl->bdln', delta, B_expanded, u)
+        B_expanded = _expand_groups(B_c, dim)
+        b = torch.einsum('bdl,bdnl,bdl->bdln', delta_c, B_expanded, u_c)
 
     # Parallel associative scan: all hidden states x_t
     # x: (B, D, L, N)
-    x = _parallel_scan(log_coeffs, values)
+    x = _associative_scan(a, b)
 
     # Output projection: y_t = C_t · x_t
-    if C.dim() == 3:
-        y = torch.einsum('bdln,bnl->bdl', x, C)
+    if C_c.dim() == 3:
+        y = torch.einsum('bdln,bnl->bdl', x, C_c)
     else:
-        C_expanded = _expand_groups(C, dim)
+        C_expanded = _expand_groups(C_c, dim)
         y = torch.einsum('bdln,bdnl->bdl', x, C_expanded)
 
     # Skip connection
     if D is not None:
-        y = y + u * D.unsqueeze(1).to(compute_dtype)
+        y = y + u_c * D.unsqueeze(1).to(compute_dtype)
 
     # Output gate
     if z is not None:
