@@ -61,7 +61,7 @@ def train(cfg: dict) -> dict:
         
     data_dir = cfg.get("data_dir", "data/LLVIP")
     batch_size = cfg.get("batch_size", 8)
-    default_workers = 0 if ("pytest" in sys.modules or os.name == "nt") else min(os.cpu_count() or 4, 8)
+    default_workers = 0 if "pytest" in sys.modules else min(os.cpu_count() or 4, 4)
     num_workers = cfg.get("workers", default_workers)
     if num_workers is None:
         num_workers = default_workers

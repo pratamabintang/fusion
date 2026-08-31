@@ -17,13 +17,9 @@ class Trainer:
             
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=epochs)
         
-        if self.amp and torch.cuda.is_available() and self.device.startswith('cuda'):
-            try:
-                self.scaler = torch.amp.GradScaler('cuda', enabled=True)
-            except Exception:
-                self.scaler = torch.cuda.amp.GradScaler(enabled=True)
-        else:
-            self.scaler = None
+        # bfloat16 has full fp32 dynamic range — no GradScaler needed.
+        # Only use GradScaler for float16 AMP.
+        self.scaler = None
             
         if self.val_loader is not None:
             self.evaluator = Evaluator(model, val_loader, device=device)
@@ -51,26 +47,18 @@ class Trainer:
 
         for batch_idx, batch in pbar:
             feat_v, feat_t, targets, metas = batch
-            feat_v = feat_v.to(self.device)
-            feat_t = feat_t.to(self.device)
-            targets = targets.to(self.device)
+            feat_v = feat_v.to(self.device, non_blocking=True)
+            feat_t = feat_t.to(self.device, non_blocking=True)
+            targets = targets.to(self.device, non_blocking=True)
             
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
             
             if self.amp:
                 with torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16):
                     loss, losses = self.model(feat_v, feat_t, targets)
-                
-                if self.scaler and self.scaler.is_enabled():
-                    self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
-                    self.optimizer.step()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                self.optimizer.step()
             else:
                 loss, losses = self.model(feat_v, feat_t, targets)
                 loss.backward()
@@ -80,7 +68,7 @@ class Trainer:
             for k, v in losses.items():
                 loss_dict[k] = loss_dict.get(k, 0.0) + (v.item() if isinstance(v, torch.Tensor) else float(v))
                 
-            if hasattr(pbar, "set_postfix"):
+            if hasattr(pbar, "set_postfix") and batch_idx % 10 == 0:
                 lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     "loss": f"{loss.item():.4f}",
